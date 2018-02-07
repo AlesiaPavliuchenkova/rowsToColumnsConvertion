@@ -10,6 +10,8 @@ import org.apache.xmlbeans.impl.piccolo.io.FileFormatException;
 import java.io.*;
 import java.util.Arrays;
 import java.util.Scanner;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * Created by alesia on 11/20/17.
@@ -17,6 +19,7 @@ import java.util.Scanner;
 public class ExcelPivotRunner {
 
     private static String filePath = "";
+    private static ExecutorService executorService;
 
     public static void main (String[] args) {
         provideFilePath();
@@ -25,14 +28,14 @@ public class ExcelPivotRunner {
         try {
             printSystemInfo();
             WorkBookHandler workBookHandler = (args.length > 0 && args[0].equals("-c")) ?
-                    new ConcurrentWorkBookHandler(Integer.parseInt(args[1])) :
+                    new ConcurrentWorkBookHandler(executorService = Executors.newFixedThreadPool(Integer.parseInt(args[1]))) :
                     new NonConcurrentWorkBookHandler();
             workBookHandler.validateFormat(file);
             DataWorkBook dataWorkBook = new DataWorkBook();
             workBookHandler.readDataFile(file, dataWorkBook);
             DataWorkBook pivotDataWorkBook = workBookHandler.pivotFileData(dataWorkBook);
             workBookHandler.writeDataToFile(file, pivotDataWorkBook);
-        } catch (FileFormatException ex) {
+        } catch (FileFormatException | InvalidFormatException ex) {
             ex.printStackTrace();
         } catch (FileNotFoundException ex) {
             System.out.println(String.format("There is no file %s", filePath)); //add log
@@ -41,8 +44,11 @@ public class ExcelPivotRunner {
             ex.printStackTrace();        //add log
         } catch (POIXMLException ex) {
             System.out.println(String.format("%s has not valid data.", filePath)); //add log
-        } catch (InvalidFormatException ex) {
-            ex.printStackTrace();
+        } finally {
+            if (executorService != null) {
+                executorService.shutdown();
+                while(!executorService.isTerminated()){}
+            }
         }
     }
 

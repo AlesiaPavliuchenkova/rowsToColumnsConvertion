@@ -23,14 +23,13 @@ public class NonConcurrentWorkBookHandler implements WorkBookHandler {
     public void readDataFile(File file, DataWorkBook dataWorkBook) throws IOException {
         start = System.currentTimeMillis();
         try(FileInputStream in = new FileInputStream(file)) {
-            /*Workbook*/XSSFWorkbook workbook = new XSSFWorkbook(in);
+            XSSFWorkbook workbook = new XSSFWorkbook(in);
             workbook.forEach((sheet) -> createDataSheet(workbook, sheet, dataWorkBook));
         }
         readTime = System.currentTimeMillis() - start;
         System.out.println(String.format("Read  non-concurrently time: %s ms", readTime));
     }
 
-    /***************************************/
     public DataWorkBook pivotFileData(DataWorkBook dataWorkBook) {
         start = System.currentTimeMillis();
         DataWorkBook pivotDataWorkBook = new DataWorkBook();
@@ -41,7 +40,6 @@ public class NonConcurrentWorkBookHandler implements WorkBookHandler {
         return pivotDataWorkBook;
     }
 
-    /***************************************/
     public void writeDataToFile(File file, DataWorkBook dataWorkbook) throws IOException, InvalidFormatException {
         start = System.currentTimeMillis();
         try(FileOutputStream out = new FileOutputStream(file, true)) {
@@ -54,21 +52,18 @@ public class NonConcurrentWorkBookHandler implements WorkBookHandler {
         }
     }
 
-    /***************************************/
     private void createDataSheet(Workbook workbook, Sheet sheet, DataWorkBook dataWorkBook) {
         DataSheet dataSheet = new DataSheet(workbook.getSheetIndex(sheet.getSheetName()));
         sheet.forEach((currentRow) -> createDataRow(currentRow, dataSheet));
         dataWorkBook.addSheet(dataSheet);
     }
 
-    /***************************************/
     private void createDataRow(Row currentRow, DataSheet dataSheet) {
         DataRow dataRow = new DataRow(currentRow.getRowNum());
         currentRow.forEach((cell) -> dataRow.addData(new DataDTO(cell, cell.getRowIndex(), cell.getColumnIndex())));
         dataSheet.addRow(dataRow);
     }
 
-    /***************************************/
     private void createPivotSheet(DataSheet sheet, DataWorkBook pivotDataWorkBook) {
         DataSheet pivotSheet = new DataSheet(sheet.getSheetNumber());
         sheet.getDataRowList().forEach((row) -> row.getDataList()
@@ -77,7 +72,6 @@ public class NonConcurrentWorkBookHandler implements WorkBookHandler {
         pivotDataWorkBook.addSheet(pivotSheet);
     }
 
-    /***************************************/
     private void pivotSheet(DataDTO dataDTO, DataSheet pivotSheet) {
         DataHandler dataHandler = new DataHandler(dataDTO);
         dataHandler.switchRowColumn();
@@ -87,19 +81,16 @@ public class NonConcurrentWorkBookHandler implements WorkBookHandler {
         pivotSheet.getRow(dataDTO.getRowNumber()).addData(dataDTO);
     }
 
-    /***************************************/
     private void createSheet(Workbook workbook, DataSheet dataSheet) {
         XSSFSheet sheet = (XSSFSheet) workbook.createSheet("Sheet" + (workbook.getNumberOfSheets() + 1));
         dataSheet.getDataRowList().forEach((dataRow) -> createRow(sheet, dataRow));
     }
 
-    /***************************************/
     private void createRow(XSSFSheet sheet, DataRow dataRow) {
         Row row = sheet.createRow(dataRow.getRowNumber());
         dataRow.getDataList().forEach((dataDTO) -> setData(row, dataDTO));
     }
 
-    /***************************************/
     private void setData(Row row, DataDTO dataDTO) {
         int cellNum = dataDTO.getColumnNumber();
         Cell cell = row.createCell(cellNum);

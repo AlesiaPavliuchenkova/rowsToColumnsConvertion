@@ -5,14 +5,11 @@ import org.apache.poi.openxml4j.exceptions.InvalidFormatException;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.util.concurrent.Executor;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
+
+import java.io.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.*;
 
 /**
  * Created by alesia on 2/2/18.
@@ -24,14 +21,13 @@ public class ConcurrentWorkBookHandler implements WorkBookHandler {
     private long writeTime;
     private ExecutorService executorService;
 
-    public ConcurrentWorkBookHandler(int threadCount) {
-        executorService = Executors.newFixedThreadPool(threadCount);
+    public ConcurrentWorkBookHandler(ExecutorService executorService) {
+        this.executorService = executorService;
     }
 
     public void readDataFile(File file, DataWorkBook dataWorkBook) throws IOException {
         start = System.currentTimeMillis();
         try (FileInputStream in = new FileInputStream(file)) {
-        /*Workbook*/
             XSSFWorkbook workbook = new XSSFWorkbook(in);
             workbook.forEach((sheet) -> createDataSheet(workbook, sheet, dataWorkBook));
         }
@@ -39,8 +35,6 @@ public class ConcurrentWorkBookHandler implements WorkBookHandler {
         System.out.println(String.format("Read  concurrently time: %s ms", readTime));
     }
 
-
-    /***************************************/
     public DataWorkBook pivotFileData(DataWorkBook dataWorkBook) {
         start = System.currentTimeMillis();
         DataWorkBook pivotDataWorkBook = new DataWorkBook();
@@ -52,10 +46,9 @@ public class ConcurrentWorkBookHandler implements WorkBookHandler {
 
     }
 
-    /***************************************/
     public void writeDataToFile(File file, DataWorkBook dataWorkbook) throws IOException, InvalidFormatException {
         start = System.currentTimeMillis();
-        try(FileOutputStream out = new FileOutputStream(file, true)) {
+        try (FileOutputStream out = new FileOutputStream(file, true)) {
             Workbook workbook = WorkbookFactory.create(file);
             dataWorkbook.getDataSheetList().forEach((sh) -> createSheet(workbook, sh));
             workbook.write(out);
@@ -65,24 +58,29 @@ public class ConcurrentWorkBookHandler implements WorkBookHandler {
         }
     }
 
-    /***************************************/
     private void createDataSheet(Workbook workbook, Sheet sheet, DataWorkBook dataWorkBook) {
         DataSheet dataSheet = new DataSheet(workbook.getSheetIndex(sheet.getSheetName()));
-        //sheet.getRows().parallelStream().forEach() ?????
-        sheet.forEach((currentRow) -> executorService.execute(() -> createDataRow(currentRow, dataSheet)));//submit returns Future
-        executorService.shutdown();
-        while(!executorService.isTerminated()){}
+        List<Future> futures = new ArrayList<>();
+        sheet.forEach((currentRow) -> futures.add(executorService.submit(
+                () -> createDataRow(currentRow, dataSheet))));
+        futures.forEach((future) -> {
+            try {
+                if (!future.isDone()) future.get();
+            } catch (InterruptedException ex) {
+                ex.printStackTrace();
+            } catch (ExecutionException ex) {
+                ex.printStackTrace();
+            }
+        });
         dataWorkBook.addSheet(dataSheet);
     }
 
-    /***************************************/
     private void createDataRow(Row currentRow, DataSheet dataSheet) {
         DataRow dataRow = new DataRow(currentRow.getRowNum());
         currentRow.forEach((cell) -> dataRow.addData(new DataDTO(cell, cell.getRowIndex(), cell.getColumnIndex())));
         dataSheet.addRow(dataRow);
     }
 
-    /***************************************/
     private void createPivotSheet(DataSheet sheet, DataWorkBook pivotDataWorkBook) {
         DataSheet pivotSheet = new DataSheet(sheet.getSheetNumber());
         sheet.getDataRowList().forEach((row) -> {
@@ -96,29 +94,25 @@ public class ConcurrentWorkBookHandler implements WorkBookHandler {
         pivotDataWorkBook.addSheet(pivotSheet);
     }
 
-    /***************************************/
     private void pivotSheet(DataDTO dataDTO, DataSheet pivotSheet) {
         DataHandler dataHandler = new DataHandler(dataDTO);
         dataHandler.switchRowColumn();
-        if(pivotSheet.getDataRowList().size() - 1 < dataDTO.getRowNumber()) {
+        if (pivotSheet.getDataRowList().size() - 1 < dataDTO.getRowNumber()) {
             pivotSheet.addRow(new DataRow(dataDTO.getRowNumber()));
         }
         pivotSheet.getRow(dataDTO.getRowNumber()).addData(dataDTO);
     }
 
-    /***************************************/
     private void createSheet(Workbook workbook, DataSheet dataSheet) {
         XSSFSheet sheet = (XSSFSheet) workbook.createSheet("Sheet" + (workbook.getNumberOfSheets() + 1));
         dataSheet.getDataRowList().forEach((dataRow) -> createRow(sheet, dataRow));
     }
 
-    /***************************************/
     private void createRow(XSSFSheet sheet, DataRow dataRow) {
         Row row = sheet.createRow(dataRow.getRowNumber());
         dataRow.getDataList().forEach((dataDTO) -> setData(row, dataDTO));
     }
 
-    /***************************************/
     private void setData(Row row, DataDTO dataDTO) {
         int cellNum = dataDTO.getColumnNumber();
         Cell cell = row.createCell(cellNum);
@@ -143,7 +137,8 @@ public class ConcurrentWorkBookHandler implements WorkBookHandler {
             case Cell.CELL_TYPE_FORMULA:
                 cell.setCellValue(dataDTO.getCell().getCellFormula());
                 break;
-            default: break;
+            default:
+                break;
         }
     }
 }
