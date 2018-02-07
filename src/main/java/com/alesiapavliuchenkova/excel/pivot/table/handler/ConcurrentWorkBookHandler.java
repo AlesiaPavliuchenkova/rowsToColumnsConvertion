@@ -23,7 +23,6 @@ public class ConcurrentWorkBookHandler implements WorkBookHandler {
     private long pivotTime;
     private long writeTime;
     private ExecutorService executorService;
-    private Object o = new Object();
 
     public ConcurrentWorkBookHandler(int threadCount) {
         executorService = Executors.newFixedThreadPool(threadCount);
@@ -39,7 +38,7 @@ public class ConcurrentWorkBookHandler implements WorkBookHandler {
         readTime = System.currentTimeMillis() - start;
         System.out.println(String.format("Read  concurrently time: %s ms", readTime));
     }
-    
+
 
     /***************************************/
     public DataWorkBook pivotFileData(DataWorkBook dataWorkBook) {
@@ -69,16 +68,11 @@ public class ConcurrentWorkBookHandler implements WorkBookHandler {
     /***************************************/
     private void createDataSheet(Workbook workbook, Sheet sheet, DataWorkBook dataWorkBook) {
         DataSheet dataSheet = new DataSheet(workbook.getSheetIndex(sheet.getSheetName()));
-
-        sheet.forEach((currentRow) -> executorService.submit(() -> createDataRow(currentRow, dataSheet)));
-
-        dataWorkBook.addSheet(dataSheet);
+        //sheet.getRows().parallelStream().forEach() ?????
+        sheet.forEach((currentRow) -> executorService.execute(() -> createDataRow(currentRow, dataSheet)));//submit returns Future
         executorService.shutdown();
-        try {
-            executorService.awaitTermination(1000, TimeUnit.MILLISECONDS);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
+        while(!executorService.isTerminated()){}
+        dataWorkBook.addSheet(dataSheet);
     }
 
     /***************************************/
@@ -91,8 +85,14 @@ public class ConcurrentWorkBookHandler implements WorkBookHandler {
     /***************************************/
     private void createPivotSheet(DataSheet sheet, DataWorkBook pivotDataWorkBook) {
         DataSheet pivotSheet = new DataSheet(sheet.getSheetNumber());
-        sheet.getDataRowList().forEach((row) -> row.getDataList()
-                .forEach((dataDTO -> pivotSheet(dataDTO, pivotSheet))));
+        sheet.getDataRowList().forEach((row) -> {
+            try {
+                row.getDataList()
+                        .forEach((dataDTO -> pivotSheet(dataDTO, pivotSheet)));
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
+        });
         pivotDataWorkBook.addSheet(pivotSheet);
     }
 

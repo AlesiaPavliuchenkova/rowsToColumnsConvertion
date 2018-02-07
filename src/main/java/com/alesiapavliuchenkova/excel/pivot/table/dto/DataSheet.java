@@ -6,22 +6,22 @@ import java.util.ArrayList;
  * Created by alesia on 11/20/17.
  */
 public class DataSheet {
-    private ArrayList<DataRow> datRowList;
+    private ArrayList<DataRow> dataRowList;
     private int sheetNumber;
 
     public DataSheet(int sheetNumber) {
-        this.datRowList = new ArrayList<DataRow>();
+        this.dataRowList = new ArrayList<DataRow>();
         this.sheetNumber = sheetNumber;
     }
 
     public void addRow(DataRow dataRow) {
-        datRowList.add(dataRow);
+        dataRowList.add(dataRow);
     }
 
-    public ArrayList<DataRow> getDataRowList() { return datRowList; }
+    public ArrayList<DataRow> getDataRowList() { return dataRowList; }
 
     public void setDataRowList(ArrayList<DataRow> rowList) {
-        this.datRowList = rowList;
+        this.dataRowList = rowList;
     }
 
 
@@ -34,6 +34,6 @@ public class DataSheet {
     }
 
     public DataRow getRow(int index) {
-        return datRowList.get(index);
+        return dataRowList.get(index);
     }
 }
