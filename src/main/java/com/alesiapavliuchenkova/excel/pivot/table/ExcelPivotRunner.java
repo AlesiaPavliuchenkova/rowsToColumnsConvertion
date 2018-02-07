@@ -1,18 +1,59 @@
 package com.alesiapavliuchenkova.excel.pivot.table;
 
+import com.alesiapavliuchenkova.excel.pivot.table.dto.DataWorkBook;
+import com.alesiapavliuchenkova.excel.pivot.table.handler.ConcurrentWorkBookHandler;
+import com.alesiapavliuchenkova.excel.pivot.table.handler.NonConcurrentWorkBookHandler;
+import com.alesiapavliuchenkova.excel.pivot.table.handler.WorkBookHandler;
 import org.apache.poi.POIXMLException;
 import org.apache.poi.openxml4j.exceptions.InvalidFormatException;
 import org.apache.xmlbeans.impl.piccolo.io.FileFormatException;
 import java.io.*;
+import java.util.Arrays;
 import java.util.Scanner;
-import static com.alesiapavliuchenkova.excel.pivot.table.MyWorkBookHandler.*;
 
 /**
  * Created by alesia on 11/20/17.
  */
 public class ExcelPivotRunner {
 
+    private static String filePath = "";
+
     public static void main (String[] args) {
+        provideFilePath();
+        File file = new File(filePath);
+
+        try {
+            printSystemInfo();
+            WorkBookHandler workBookHandler = (args.length > 0 && args[0].equals("-c")) ?
+                    new ConcurrentWorkBookHandler(Integer.parseInt(args[1])) :
+                    new NonConcurrentWorkBookHandler();
+            workBookHandler.validateFormat(file);
+            DataWorkBook dataWorkBook = new DataWorkBook();
+            workBookHandler.readDataFile(file, dataWorkBook);
+            DataWorkBook pivotDataWorkBook = workBookHandler.pivotFileData(dataWorkBook);
+            workBookHandler.writeDataToFile(file, pivotDataWorkBook);
+        } catch (FileFormatException ex) {
+            ex.printStackTrace();
+        } catch (FileNotFoundException ex) {
+            System.out.println(String.format("There is no file %s", filePath)); //add log
+            ex.printStackTrace();
+        } catch (IOException ex) {
+            ex.printStackTrace();        //add log
+        } catch (POIXMLException ex) {
+            System.out.println(String.format("%s has not valid data.", filePath)); //add log
+        } catch (InvalidFormatException ex) {
+            ex.printStackTrace();
+        }
+    }
+
+    private static void printSystemInfo() {
+        System.out.println(String.format("System info: %s %s %s",
+                System.getProperty("os.name"),
+                System.getProperty("os.version"),
+                System.getProperty("os.arch")));
+    }
+
+    private static void provideFilePath() {
         String path = "src\\main\\resources\\Sample-Sales-Data.xlsx";
 
         Scanner scanner = new Scanner(System.in);
@@ -24,42 +65,7 @@ public class ExcelPivotRunner {
         }
 
         String[] filePaths = path.split("\\\\");
-        String filePath = "";
-        for (int i = 0; i< filePaths.length; i++) {
-            filePath += filePaths[i];
-            if (i != filePaths.length - 1) filePath += File.separator;
-        }
-
-        File file = new File(filePath);
-
-        if(file.exists()) {//only then create MyWorkBook
-            //validate that file format is xls or xlsx
-            try {
-                validateFormat(file); //move this validation to MyWorkBook constructor ???
-
-                MyWorkBook myWorkBook = new MyWorkBook();
-                //read excel file data
-                readDataFile(file, myWorkBook); //xlsx   + add for xls
-                //pivot rows to columns
-                MyWorkBook pivotMyWorkBook = pivotFileData(myWorkBook);
-                //writeDataToNewSheet
-                writeDataToFile(file, pivotMyWorkBook);
-            } catch (FileFormatException ex) {
-                ex.printStackTrace();
-            } catch (FileNotFoundException ex) {
-                System.out.println("There is no file " + file.toString()); //add log
-                ex.printStackTrace();
-            } catch (IOException ex) {
-                ex.printStackTrace();        //add log
-            } catch (POIXMLException ex) {
-                String[] arr = file.getAbsoluteFile().toString().split(File.separator);
-                String fileName = arr[arr.length - 1];
-                System.out.println(fileName + " has not valid data. "); //add log
-            } catch (InvalidFormatException e) {
-                e.printStackTrace();
-            }
-        } else {
-            System.out.println("file " + file + " doesn't exist.");
-        }
+        Arrays.stream(filePaths).forEach((el) -> filePath += el + File.separator);
+        filePath = filePath.replaceFirst(".$", "");
     }
 }
