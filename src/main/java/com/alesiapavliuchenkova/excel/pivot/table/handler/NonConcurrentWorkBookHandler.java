@@ -9,51 +9,36 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 
 /**
  * Created by apavliuchenkova on 23/11/2017.
  */
 public class NonConcurrentWorkBookHandler implements WorkBookHandler {
 
-    private long start;
-    private long readTime;
-    private long pivotTime;
-    private long writeTime;
-
     public void readDataFile(File file, DataWorkBook dataWorkBook) throws IOException {
-        start = System.currentTimeMillis();
         try(FileInputStream in = new FileInputStream(file)) {
             XSSFWorkbook workbook = new XSSFWorkbook(in);
             workbook.forEach((sheet) -> createDataSheet(workbook, sheet, dataWorkBook));
         }
-        readTime = System.currentTimeMillis() - start;
-        System.out.println(String.format("Read  non-concurrently time: %s ms", readTime));
     }
 
     public DataWorkBook pivotFileData(DataWorkBook dataWorkBook) {
-        start = System.currentTimeMillis();
         DataWorkBook pivotDataWorkBook = new DataWorkBook();
         dataWorkBook.getDataSheetList().forEach((sheet) -> createPivotSheet(sheet, pivotDataWorkBook));
-
-        pivotTime = System.currentTimeMillis() - start;
-        System.out.println(String.format("Pivot non-concurrently time: %s ms", pivotTime));
         return pivotDataWorkBook;
     }
 
     public void writeDataToFile(File file, DataWorkBook dataWorkbook) throws IOException, InvalidFormatException {
-        start = System.currentTimeMillis();
         try(FileOutputStream out = new FileOutputStream(file, true)) {
             Workbook workbook = WorkbookFactory.create(file);
             dataWorkbook.getDataSheetList().forEach((sh) -> createSheet(workbook, sh));
             workbook.write(out);
-            writeTime = System.currentTimeMillis() - start;
-            System.out.println(String.format("Write non-concurrently time: %s ms", writeTime));
-            System.out.println(String.format("Full non-concurrent process time = %s ms", readTime + pivotTime + writeTime));
         }
     }
 
     private void createDataSheet(Workbook workbook, Sheet sheet, DataWorkBook dataWorkBook) {
-        DataSheet dataSheet = new DataSheet(workbook.getSheetIndex(sheet.getSheetName()));
+        DataSheet dataSheet = new DataSheet(workbook.getSheetIndex(sheet.getSheetName()), new ArrayList<>());
         sheet.forEach((currentRow) -> createDataRow(currentRow, dataSheet));
         dataWorkBook.addSheet(dataSheet);
     }
@@ -65,7 +50,7 @@ public class NonConcurrentWorkBookHandler implements WorkBookHandler {
     }
 
     private void createPivotSheet(DataSheet sheet, DataWorkBook pivotDataWorkBook) {
-        DataSheet pivotSheet = new DataSheet(sheet.getSheetNumber());
+        DataSheet pivotSheet = new DataSheet(sheet.getSheetNumber(), new ArrayList<>());
         sheet.getDataRowList().forEach((row) -> row.getDataList()
                 .forEach((dataDTO -> pivotSheet(dataDTO, pivotSheet))));
 

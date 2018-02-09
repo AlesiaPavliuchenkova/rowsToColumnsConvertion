@@ -15,10 +15,6 @@ import java.util.concurrent.*;
  * Created by alesia on 2/2/18.
  */
 public class ConcurrentWorkBookHandler implements WorkBookHandler {
-    private long start;
-    private long readTime;
-    private long pivotTime;
-    private long writeTime;
     private ExecutorService executorService;
 
     public ConcurrentWorkBookHandler(ExecutorService executorService) {
@@ -26,52 +22,33 @@ public class ConcurrentWorkBookHandler implements WorkBookHandler {
     }
 
     public void readDataFile(File file, DataWorkBook dataWorkBook) throws IOException {
-        start = System.currentTimeMillis();
         try (FileInputStream in = new FileInputStream(file)) {
             XSSFWorkbook workbook = new XSSFWorkbook(in);
             workbook.forEach((sheet) -> createDataSheet(workbook, sheet, dataWorkBook));
         }
-        readTime = System.currentTimeMillis() - start;
-        System.out.println(String.format("Read  concurrently time: %s ms", readTime));
     }
 
     public DataWorkBook pivotFileData(DataWorkBook dataWorkBook) {
-        start = System.currentTimeMillis();
         DataWorkBook pivotDataWorkBook = new DataWorkBook();
-        dataWorkBook.getDataSheetList().forEach((sheet) -> createPivotSheet(sheet, pivotDataWorkBook));
-
-        pivotTime = System.currentTimeMillis() - start;
-        System.out.println(String.format("Pivot concurrently time: %s ms", pivotTime));
+        dataWorkBook.getDataSheetList().forEach((sheet) -> pivotSheet(sheet, pivotDataWorkBook));
         return pivotDataWorkBook;
-
     }
 
     public void writeDataToFile(File file, DataWorkBook dataWorkbook) throws IOException, InvalidFormatException {
-        start = System.currentTimeMillis();
         try (FileOutputStream out = new FileOutputStream(file, true)) {
             Workbook workbook = WorkbookFactory.create(file);
             dataWorkbook.getDataSheetList().forEach((sh) -> createSheet(workbook, sh));
             workbook.write(out);
-            writeTime = System.currentTimeMillis() - start;
-            System.out.println(String.format("Write concurrently time: %s ms", writeTime));
-            System.out.println(String.format("Full concurrent process time = %s ms", readTime + pivotTime + writeTime));
         }
     }
 
     private void createDataSheet(Workbook workbook, Sheet sheet, DataWorkBook dataWorkBook) {
-        DataSheet dataSheet = new DataSheet(workbook.getSheetIndex(sheet.getSheetName()));
+        DataSheet dataSheet = new DataSheet(workbook.getSheetIndex(sheet.getSheetName())
+                , new CopyOnWriteArrayList<>());
         List<Future> futures = new ArrayList<>();
-        sheet.forEach((currentRow) -> futures.add(executorService.submit(
-                () -> createDataRow(currentRow, dataSheet))));
-        futures.forEach((future) -> {
-            try {
-                if (!future.isDone()) future.get();
-            } catch (InterruptedException ex) {
-                ex.printStackTrace();
-            } catch (ExecutionException ex) {
-                ex.printStackTrace();
-            }
-        });
+        sheet.forEach((currentRow) ->
+                futures.add(executorService.submit(() -> createDataRow(currentRow, dataSheet))));
+        proceedFutures(futures);
         dataWorkBook.addSheet(dataSheet);
     }
 
@@ -81,31 +58,27 @@ public class ConcurrentWorkBookHandler implements WorkBookHandler {
         dataSheet.addRow(dataRow);
     }
 
-    private void createPivotSheet(DataSheet sheet, DataWorkBook pivotDataWorkBook) {
-        DataSheet pivotSheet = new DataSheet(sheet.getSheetNumber());
-        sheet.getDataRowList().forEach((row) -> {
-            try {
-                row.getDataList()
-                        .forEach((dataDTO -> pivotSheet(dataDTO, pivotSheet)));
-            } catch (Exception ex) {
-                ex.printStackTrace();
-            }
-        });
+    private void pivotSheet(DataSheet sheet, DataWorkBook pivotDataWorkBook) {
+        DataSheet pivotSheet = new DataSheet(sheet.getSheetNumber(), new CopyOnWriteArrayList<>());
+        sheet.getDataRowList().forEach((row) ->
+            row.getDataList().forEach(dataDTO -> pivotData(dataDTO, pivotSheet)));
         pivotDataWorkBook.addSheet(pivotSheet);
     }
 
-    private void pivotSheet(DataDTO dataDTO, DataSheet pivotSheet) {
+    private void pivotData(DataDTO dataDTO, DataSheet pivotSheet) {
         DataHandler dataHandler = new DataHandler(dataDTO);
         dataHandler.switchRowColumn();
-        if (pivotSheet.getDataRowList().size() - 1 < dataDTO.getRowNumber()) {
+        if (pivotSheet.getDataRowList().size() - 1 < dataDTO.getRowNumber())
             pivotSheet.addRow(new DataRow(dataDTO.getRowNumber()));
-        }
         pivotSheet.getRow(dataDTO.getRowNumber()).addData(dataDTO);
     }
 
     private void createSheet(Workbook workbook, DataSheet dataSheet) {
+        ArrayList<Future> futures = new ArrayList<>();
         XSSFSheet sheet = (XSSFSheet) workbook.createSheet("Sheet" + (workbook.getNumberOfSheets() + 1));
-        dataSheet.getDataRowList().forEach((dataRow) -> createRow(sheet, dataRow));
+        dataSheet.getDataRowList().forEach((dataRow) ->
+                futures.add(executorService.submit(() -> createRow(sheet, dataRow))));
+        proceedFutures(futures);
     }
 
     private void createRow(XSSFSheet sheet, DataRow dataRow) {
@@ -140,5 +113,15 @@ public class ConcurrentWorkBookHandler implements WorkBookHandler {
             default:
                 break;
         }
+    }
+
+    private void proceedFutures(List<Future> futures) {
+        futures.forEach(future -> {
+            if (!future.isDone()) try {
+                future.get();
+            } catch (InterruptedException | ExecutionException e) {
+                e.printStackTrace();
+            }
+        });
     }
 }

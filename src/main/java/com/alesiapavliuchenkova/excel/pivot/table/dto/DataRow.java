@@ -1,12 +1,13 @@
 package com.alesiapavliuchenkova.excel.pivot.table.dto;
 
 import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Created by alesia on 11/20/17.
  */
 public class DataRow {
-    private ArrayList<DataDTO> dataList;
+    private List<DataDTO> dataList;
     private int rowNumber;
 
     public DataRow(int rowNumber) {
@@ -18,7 +19,7 @@ public class DataRow {
         dataList.add(dataDTO);
     }
 
-    public ArrayList<DataDTO> getDataList() {
+    public List<DataDTO> getDataList() {
         return dataList;
     }
 

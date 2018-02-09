@@ -24,7 +24,7 @@ public class ExcelPivotRunner {
     public static void main (String[] args) {
         provideFilePath();
         File file = new File(filePath);
-
+        long start = System.currentTimeMillis();
         try {
             printSystemInfo();
             WorkBookHandler workBookHandler = (args.length > 0 && args[0].equals("-c")) ?
@@ -50,6 +50,9 @@ public class ExcelPivotRunner {
                 while(!executorService.isTerminated()){}
             }
         }
+        System.out.println(String.format("%s process time = %s ms"
+                , (args.length > 0 && args[0].equals("-c")) ? "Concurrent" : "Non concurrent"
+                , System.currentTimeMillis() - start));
     }
 
     private static void printSystemInfo() {
