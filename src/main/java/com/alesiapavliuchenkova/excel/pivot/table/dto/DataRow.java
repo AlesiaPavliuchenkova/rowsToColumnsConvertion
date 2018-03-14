@@ -15,7 +15,6 @@ public class DataRow {
         this.rowNumber = rowNumber;
     }
 
-
     public void addData(DataDTO dataDTO) {
         dataList.add(dataDTO);
     }
